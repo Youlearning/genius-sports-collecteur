@@ -2,14 +2,13 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import json
-import os
 
 # Configuration de la page
-st.set_page_config(page_title="Statisticien Genius Sports", layout="wide")
-st.title("📝 Outil de collecte de données sportives")
+st.set_page_config(page_title="Statisticien Basketball - Genius Sports", layout="wide")
+st.title("🏀 Outil de collecte - Basketball (Genius Sports)")
 st.markdown("---")
 
-# Informations du match (À remplir avant de commencer)
+# Informations du match
 with st.expander("📋 Informations du match", expanded=True):
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -25,18 +24,20 @@ with st.expander("📋 Informations du match", expanded=True):
     with col2:
         equipe_exterieur = st.text_input("Équipe extérieur", "Côte d'Ivoire")
 
-# Initialisation des données
+# Initialisation
 if 'actions' not in st.session_state:
     st.session_state.actions = []
     st.session_state.score_domicile = 0
     st.session_state.score_exterieur = 0
+    st.session_state.fautes_domicile = 0
+    st.session_state.fautes_exterieur = 0
 
-# Interface de saisie (3 colonnes pour plus d'options)
+# Interface de saisie
 st.subheader("➕ Enregistrer une action")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    minute = st.number_input("Minute", 1, 120, 1)
+    minute = st.number_input("Minute", 1, 48, 1)  # 48 min pour un match FIBA
     seconde = st.number_input("Seconde", 0, 59, 0)
 
 with col2:
@@ -45,140 +46,127 @@ with col2:
 with col3:
     type_action = st.selectbox(
         "Action",
-        ["Tir", "Tir cadré", "But", "Faute", "Carton jaune", 
-         "Carton rouge", "Corner", "Hors-jeu", "Arrêt", "Remplacement"]
+        ["Panier à 2 pts", "Panier à 3 pts", "Lancer-franc réussi", 
+         "Lancer-franc manqué", "Faute", "Faute antisportive", 
+         "Rebond", "Interception", "Contre", "Perte de balle",
+         "Temps-mort", "Fin de quart-temps"]
     )
 
 with col4:
     joueur = st.text_input("Joueur", "")
-    # Boutons rapides pour actions courantes
-    st.caption("Actions rapides:")
+    st.caption("Valeurs rapides:")
 
-# Actions rapides en dessous
+# Boutons rapides
 col_rapide1, col_rapide2, col_rapide3, col_rapide4 = st.columns(4)
 with col_rapide1:
-    if st.button("⚽ But"):
-        action_rapide = "But"
+    if st.button("🏀 2 pts"):
+        type_action_rapide = "Panier à 2 pts"
 with col_rapide2:
-    if st.button("🟨 Carton jaune"):
-        action_rapide = "Carton jaune"
+    if st.button("🎯 3 pts"):
+        type_action_rapide = "Panier à 3 pts"
 with col_rapide3:
-    if st.button("🔄 Remplacement"):
-        action_rapide = "Remplacement"
+    if st.button("🟨 Faute"):
+        type_action_rapide = "Faute"
 with col_rapide4:
-    if st.button("⏱️ Mi-temps"):
-        action_rapide = "Mi-temps"
+    if st.button("⏱️ Fin quart"):
+        type_action_rapide = "Fin de quart-temps"
 
-# Bouton d'ajout principal
+# Bouton principal
 if st.button("➕ Enregistrer l'action", type="primary"):
+    # Déterminer les points marqués
+    points = 0
+    if type_action == "Panier à 2 pts":
+        points = 2
+    elif type_action == "Panier à 3 pts":
+        points = 3
+    elif type_action == "Lancer-franc réussi":
+        points = 1
+    
     action = {
         'match_id': match_id,
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'minute': f"{minute}:{seconde:02d}",
         'equipe': equipe,
         'action': type_action,
-        'joueur': joueur if joueur else "Non spécifié"
+        'joueur': joueur if joueur else "Non spécifié",
+        'points': points
     }
     st.session_state.actions.append(action)
     st.success(f"✅ Action enregistrée : {type_action} à la {minute}'{seconde:02d}")
     
-    # Mise à jour automatique du score
-    if type_action == "But":
+    # Mise à jour du score
+    if points > 0:
         if equipe == equipe_domicile:
-            st.session_state.score_domicile += 1
+            st.session_state.score_domicile += points
         else:
-            st.session_state.score_exterieur += 1
+            st.session_state.score_exterieur += points
+    
+    # Mise à jour des fautes
+    if "Faute" in type_action:
+        if equipe == equipe_domicile:
+            st.session_state.fautes_domicile += 1
+        else:
+            st.session_state.fautes_exterieur += 1
 
-# Affichage du score en direct
+# Affichage du score
 st.markdown("---")
 col_score1, col_score2, col_score3 = st.columns(3)
 with col_score1:
     st.markdown(f"## 🏠 {equipe_domicile}")
+    st.markdown(f"**Fautes:** {st.session_state.fautes_domicile}")
 with col_score2:
     st.markdown(f"## {st.session_state.score_domicile} - {st.session_state.score_exterieur}")
 with col_score3:
     st.markdown(f"## {equipe_exterieur} ✈️")
+    st.markdown(f"**Fautes:** {st.session_state.fautes_exterieur}")
 
-# Résumé et statistiques
+# Statistiques avancées
 if st.session_state.actions:
-    st.subheader("📊 Statistiques du match")
+    st.subheader("📊 Statistiques détaillées")
     df = pd.DataFrame(st.session_state.actions)
     
-    # Filtres
-    col1, col2 = st.columns(2)
-    with col1:
-        equipe_filter = st.multiselect("Filtrer par équipe", df['equipe'].unique(), default=df['equipe'].unique())
-    with col2:
-        action_filter = st.multiselect("Filtrer par action", df['action'].unique(), default=df['action'].unique())
-    
-    df_filtered = df[(df['equipe'].isin(equipe_filter)) & (df['action'].isin(action_filter))]
-    
-    # Métriques
+    # Métriques par équipe
     col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        st.metric("Total actions", len(df_filtered))
+        total_points_domicile = df[df['equipe'] == equipe_domicile]['points'].sum()
+        st.metric(f"🏠 {equipe_domicile} - Points", total_points_domicile)
+    
     with col2:
-        tirs = len(df_filtered[df_filtered['action'].str.contains('Tir', na=False)])
-        st.metric("Tirs", tirs)
+        total_points_exterieur = df[df['equipe'] == equipe_exterieur]['points'].sum()
+        st.metric(f"✈️ {equipe_exterieur} - Points", total_points_exterieur)
+    
     with col3:
-        fautes = len(df_filtered[df_filtered['action'] == 'Faute'])
-        st.metric("Fautes", fautes)
+        tirs_reussis = len(df[df['action'].str.contains('Panier|Lancer-franc réussi')])
+        st.metric("Tirs réussis", tirs_reussis)
+    
     with col4:
-        corners = len(df_filtered[df_filtered['action'] == 'Corner'])
-        st.metric("Corners", corners)
+        interceptions = len(df[df['action'] == 'Interception'])
+        st.metric("Interceptions", interceptions)
     
     # Tableau des actions
-    st.dataframe(df_filtered, use_container_width=True)
+    st.dataframe(df, use_container_width=True)
     
-    # Export options
-    col1, col2, col3 = st.columns(3)
+    # Export
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Exporter en CSV"):
+        if st.button("💾 Exporter CSV"):
             csv = df.to_csv(index=False)
-            st.download_button(
-                "📥 Télécharger CSV",
-                csv,
-                f"match_{match_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                "text/csv"
-            )
+            st.download_button("📥 Télécharger", csv, f"basket_{match_id}.csv")
     
     with col2:
-        if st.button("📤 Exporter en JSON"):
+        if st.button("📤 Exporter JSON"):
             json_str = df.to_json(orient='records', indent=2)
-            st.download_button(
-                "📥 Télécharger JSON",
-                json_str,
-                f"match_{match_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                "application/json"
-            )
+            st.download_button("📥 Télécharger", json_str, f"basket_{match_id}.json")
     
-    with col3:
-        if st.button("🔄 Réinitialiser le match"):
-            st.session_state.actions = []
-            st.session_state.score_domicile = 0
-            st.session_state.score_exterieur = 0
-            st.rerun()
-    
-    # Aperçu du format API Genius Sports
-    with st.expander("🔍 Voir le format API Genius Sports"):
-        if len(df) > 0:
-            exemple = df.iloc[-1].to_dict()
-            st.json({
-                "match_id": exemple.get('match_id'),
-                "action": {
-                    "type": exemple.get('action'),
-                    "minute": exemple.get('minute'),
-                    "team": exemple.get('equipe'),
-                    "player": exemple.get('joueur')
-                },
-                "score": {
-                    "home": st.session_state.score_domicile,
-                    "away": st.session_state.score_exterieur
-                },
-                "timestamp": exemple.get('timestamp')
-            })
-else:
-    st.info("👆 Commencez à enregistrer les actions du match !")
+    # Réinitialisation
+    if st.button("🔄 Nouveau match"):
+        st.session_state.actions = []
+        st.session_state.score_domicile = 0
+        st.session_state.score_exterieur = 0
+        st.session_state.fautes_domicile = 0
+        st.session_state.fautes_exterieur = 0
+        st.rerun()
 
 # Pied de page
 st.markdown("---")
